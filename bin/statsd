@@ -1,0 +1,12 @@
+#!/usr/bin/env luvit
+
+local Statsd = require('../statsd').Statsd
+local JSON = require('json')
+
+local s = Statsd:new()
+s:bind()
+s:run()
+
+s:on('metrics', function(metrics)
+  print(JSON.stringify(metrics))
+end)
