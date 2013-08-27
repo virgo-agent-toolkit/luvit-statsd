@@ -187,6 +187,7 @@ function Statsd:_onMessage(msg, rinfo)
 
     metric_name = bits[1]
     metric_value = tonumber(fields[1])
+    metric_value_raw = fields[1]
     metric_type = fields[2]
 
     if fields[3] then
@@ -209,7 +210,12 @@ function Statsd:_onMessage(msg, rinfo)
       self._timer_counters[metric_name] = self._timer_counters[metric_name] + (1/sampleRate)
     elseif metric_type == 'g' then
       -- gauges
-      self._gauges[metric_name] = metric_value
+      if metric_value_raw:sub(1, 1) == '+' or
+         metric_value_raw:sub(1, 1) == '-' then
+        self._gauges[metric_name] = self._gauges[metric_name] + metric_value
+      else
+        self._gauges[metric_name] = metric_value
+      end
     elseif metric_type == 's' then
       -- sets
     end
