@@ -1,3 +1,19 @@
+--[[
+Copyright 2013 Rackspace
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS-IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+--]]
+
 local Emitter = require('core').Emitter
 local dgram = require('dgram')
 local timer = require('timer')
@@ -7,34 +23,7 @@ local utils = require('utils')
 local hrtime = require('uv').Process.hrtime
 local fmt = require('string').format
 local JSON = require('json')
-
-function split(str, pat)
-  local t = {}  -- NOTE: use {n = 0} in Lua-5.0
-  local fpat = "(.-)" .. pat
-  local last_end = 1
-  local s, e, cap = str:find(fpat, 1)
-  while s do
-    if s ~= 1 or cap ~= "" then
-      table.insert(t,cap)
-    end
-    last_end = e+1
-    s, e, cap = str:find(fpat, last_end)
-  end
-  if last_end <= #str then
-    cap = str:sub(last_end)
-    table.insert(t, cap)
-  end
-  return t
-end
-
-local function trim(s)
-  return (s:gsub("^%s*(.-)%s*$", "%1"))
-end
-
-function round(num, idp)
-  local mult = 10^(idp or 0)
-  return math.floor(num * mult + 0.5) / mult
-end
+local misc = require('./misc')
 
 ----------------------------
 
@@ -80,11 +69,15 @@ function Statsd:_processMetrics(metrics, callback)
   local timer_data = {}
   local statsd_metrics = {}
 
-  for k, v in pairs(self._counters) do
+  if not metrics.pctThreshold then
+    metrics.pctThreshold = self._options.percent_threshold
+  end
+
+  for k, v in pairs(metrics.counters) do
     counter_rates[k] = v / (self._options.metrics_interval / 1000)
   end
 
-  for k, v in pairs(self._timers) do
+  for k, v in pairs(metrics.timers) do
     local current_timer_data = {}
     timer_data[k] = {}
 
@@ -100,8 +93,8 @@ function Statsd:_processMetrics(metrics, callback)
     local cumulativeValues = { min }
 
     if count ~= 1 then
-      for i=1, count do
-        table.insert(cumulativeValues, v[i] + cumulativeValues[i])
+      for i=2, count do
+        table.insert(cumulativeValues, v[i] + cumulativeValues[i - 1])
       end
     end
 
@@ -109,15 +102,15 @@ function Statsd:_processMetrics(metrics, callback)
     local mean = min
     local thresholdBoundary = max
 
-    for _, pct in pairs(self._options.percent_threshold) do
+    for _, pct in pairs(metrics.pctThreshold) do
       if count > 1 then
-        local numInThreshold = round(math.abs(pct) / 100 * count)
+        local numInThreshold = misc.round(math.abs(pct) / 100 * count)
         if numInThreshold ~= 0 then
           if pct > 0 then
-            thresholdBoundary = values[numInThreshold]
+            thresholdBoundary = v[numInThreshold]
             sum = cumulativeValues[numInThreshold]
           else
-            thresholdBoundary = values[count - numInThreshold]
+            thresholdBoundary = v[count - numInThreshold + 1]
             sum = cumulativeValues[count] - cumulativeValues[count - numInThreshold]
           end
         end
@@ -155,8 +148,8 @@ function Statsd:_processMetrics(metrics, callback)
     current_timer_data['std'] = stddev
     current_timer_data['upper'] = max
     current_timer_data['lower'] = min
-    current_timer_data['count'] = self._timer_counters[k]
-    current_timer_data['count_ps'] = self._timer_counters[k] / (self._options.metrics_interval / 1000)
+    current_timer_data['count'] = metrics.timer_counters[k]
+    current_timer_data['count_ps'] = metrics.timer_counters[k] / (self._options.metrics_interval / 1000)
     current_timer_data['sum'] = sum
     current_timer_data['mean'] = mean
     current_timer_data['median'] = median
@@ -165,10 +158,11 @@ function Statsd:_processMetrics(metrics, callback)
     timer_data[k] = current_timer_data
   end
 
+  statsd_metrics.processing_time = hrtime() - start_time
+
   metrics.counter_rates = counter_rates
   metrics.timer_data = timer_data
-  metrics.processing_time = hrtime() - start_time
-  metrics.pctThreshold = self._options.percent_threshold
+  metrics.statsd_metrics = statsd_metrics
 
   callback(metrics)
 end
@@ -177,9 +171,9 @@ function Statsd:_onMessage(msg, rinfo)
   local metrics
 
   if msg:find('\n') then
-    metrics = split(msg, '\n')
+    metrics = misc.split(msg, '\n')
   else
-    metrics = { trim(msg) }
+    metrics = { misc.trim(msg) }
   end
 
   self._counters[packets_received] = self._counters[packets_received] + 1
@@ -188,8 +182,8 @@ function Statsd:_onMessage(msg, rinfo)
     local metric_name, metric_value, metric_type, bits, fields
     local sampleRate = 1
 
-    bits = split(metric, ':')
-    fields = split(bits[2], '|')
+    bits = misc.split(metric, ':')
+    fields = misc.split(bits[2], '|')
 
     metric_name = bits[1]
     metric_value = tonumber(fields[1])
@@ -225,9 +219,11 @@ end
 function Statsd:_onInterval()
   local metrics_hash = {}
 
+  metrics_hash.timer_counters = self._timer_counters
   metrics_hash.counters = self._counters
   metrics_hash.timers = self._timers
   metrics_hash.gauges = self._gauges
+  metrics_hash.percent_threshold = self._options.percent_threshold
 
   self:_processMetrics(metrics_hash, function(metrics)
     self:emit('metrics', metrics)
