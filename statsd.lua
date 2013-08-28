@@ -298,7 +298,7 @@ function Statsd:_onInterval()
       self._timer_counters[k] = 0
     end
     for k, _ in pairs(self._sets) do
-      self._sets[k] = Set:new()
+      self._sets[k]:clear()
     end
   end)
 end
