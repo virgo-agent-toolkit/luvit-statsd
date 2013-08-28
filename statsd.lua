@@ -101,6 +101,13 @@ function Statsd:bind(port)
   self._sock:bind(self._options.port)
 end
 
+function Statsd:close()
+  self._sock:close()
+  if self._interval then
+    timer.clearTimer(self._interval)
+  end
+end
+
 function Statsd:_processMetrics(metrics, callback)
   local start_time = hrtime()
   local counter_rates = {}
