@@ -22,8 +22,6 @@ local table = require('table')
 local math = require('math')
 local utils = require('utils')
 local hrtime = require('uv').Process.hrtime
-local fmt = require('string').format
-local JSON = require('json')
 local misc = require('./misc')
 
 ----------------------------
