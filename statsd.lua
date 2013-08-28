@@ -15,6 +15,7 @@ limitations under the License.
 --]]
 
 local Emitter = require('core').Emitter
+local Object = require('core').Object
 local dgram = require('dgram')
 local timer = require('timer')
 local table = require('table')
@@ -35,8 +36,38 @@ local DEFAULT_THRESHOLD = 90
 local packets_received = PREFIX_STATS .. 'packets_received'
 local bad_lines_seen = PREFIX_STATS .. 'bad_lines_seen'
 
-local Statsd = Emitter:extend()
+----------------------------
 
+local Set = Object:extend()
+function Set:initialize()
+  self.store = {}
+end
+
+function Set:insert(value)
+  if value then
+    self.store[value] = value
+  end
+end
+
+function Set:clear()
+  self.store = {}
+end
+
+function Set:has(value)
+  return self.store[value] ~= nil
+end
+
+function Set:values()
+  local t = {}
+  for k, _ in pairs(self.store) do
+    table.insert(t, k)
+  end
+  return t
+end
+
+----------------------------
+
+local Statsd = Emitter:extend()
 function Statsd:initialize(options)
   self._options = options or {}
   self._counters = {}
@@ -45,8 +76,11 @@ function Statsd:initialize(options)
   self._timers = {}
   self._timer_counters = {}
   self._gauges = {}
+  self._sets = {}
   self._sock = dgram.createSocket('udp4')
   self._sock:on('message', utils.bind(Statsd._onMessage, self))
+
+  self._bound = false
 
   if not self._options.port then
     self._options.port = DEFAULT_PORT
@@ -60,6 +94,10 @@ function Statsd:initialize(options)
 end
 
 function Statsd:bind(port)
+  if self._bound then
+    return
+  end
+  self._bound = true
   self._sock:bind(self._options.port)
 end
 
@@ -218,6 +256,16 @@ function Statsd:_onMessage(msg, rinfo)
       end
     elseif metric_type == 's' then
       -- sets
+      local set = self._sets[metric_name]
+      if not set then
+        set = Set:new()
+        self._sets[metric_name] = set
+      end
+      if metric_value_raw == '' then
+        set:insert('0')
+      else
+        set:insert(metric_value_raw)
+      end
     end
   end
 end
@@ -231,6 +279,12 @@ function Statsd:_onInterval()
   metrics_hash.gauges = self._gauges
   metrics_hash.percent_threshold = self._options.percent_threshold
 
+  -- copy sets
+  metrics_hash.sets = {}
+  for k, v in pairs(self._sets) do
+    metrics_hash.sets[k] = v:values()
+  end
+
   self:_processMetrics(metrics_hash, function(metrics)
     self:emit('metrics', metrics)
 
@@ -242,6 +296,9 @@ function Statsd:_onInterval()
     end
     for k, _ in pairs(self._timer_counters) do
       self._timer_counters[k] = 0
+    end
+    for k, _ in pairs(self._sets) do
+      self._sets[k] = Set:new()
     end
   end)
 end
