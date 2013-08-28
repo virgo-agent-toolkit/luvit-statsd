@@ -15,6 +15,7 @@ limitations under the License.
 --]]
 
 local Statsd = require('../statsd').Statsd
+local version = require('../statsd').version
 local misc = require('../misc')
 
 local function createMetrics()
@@ -231,6 +232,11 @@ exports['test_statsd_metrics_exist'] = function(test, asserts)
     asserts.ok(metrics.statsd_metrics.processing_time)
     test.done()
   end)
+end
+
+exports['test_version'] = function(test, asserts)
+  asserts.ok(version)
+  test.done()
 end
 
 return exports

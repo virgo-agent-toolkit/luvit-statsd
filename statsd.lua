@@ -315,6 +315,11 @@ function Statsd:run()
   self._interval = timer.setInterval(self._options.metrics_interval, utils.bind(Statsd._onInterval, self))
 end
 
+function version()
+  return '0.1.0-dev'
+end
+
 local exports = {}
 exports.Statsd = Statsd
+exports.version = version
 return exports
