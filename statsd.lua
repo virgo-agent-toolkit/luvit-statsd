@@ -21,7 +21,7 @@ local timer = require('timer')
 local table = require('table')
 local math = require('math')
 local utils = require('utils')
-local hrtime = require('uv').Process.hrtime
+local hrtime = require('uv').hrtime
 local misc = require('./misc')
 
 ----------------------------
@@ -218,7 +218,7 @@ function Statsd:_processMetrics(metrics, callback)
   callback(metrics)
 end
 
-function Statsd:_onMessage(msg, rinfo)
+function Statsd:_onMessage(msg)
   local metrics
 
   if msg:find('\n') then
@@ -230,7 +230,7 @@ function Statsd:_onMessage(msg, rinfo)
   self._counters[packets_received] = self._counters[packets_received] + 1
 
   for _, metric in ipairs(metrics) do
-    local metric_name, metric_value, metric_type, bits, fields
+    local metric_name, metric_value_raw, metric_value, metric_type, bits, fields
     local sampleRate = 1
 
     bits = misc.split(metric, ':')
@@ -323,11 +323,4 @@ function Statsd:run()
   self._interval = timer.setInterval(self._options.metrics_interval, utils.bind(Statsd._onInterval, self))
 end
 
-function version()
-  return '0.1.2'
-end
-
-local exports = {}
 exports.Statsd = Statsd
-exports.version = version
-return exports

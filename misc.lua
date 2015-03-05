@@ -1,5 +1,5 @@
 --[[
-Copyright 2013 Rackspace
+Copyright 2015 Rackspace
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ limitations under the License.
 local math = require('math')
 local table = require('table')
 
-function split(str, pat)
+function exports.split(str, pat)
   local t = {}  -- NOTE: use {n = 0} in Lua-5.0
   local fpat = "(.-)" .. pat
   local last_end = 1
@@ -35,18 +35,11 @@ function split(str, pat)
   return t
 end
 
-local function trim(s)
+function exports.trim(s)
   return (s:gsub("^%s*(.-)%s*$", "%1"))
 end
 
-function round(num, idp)
+function exports.round(num, idp)
   local mult = 10^(idp or 0)
   return math.floor(num * mult + 0.5) / mult
 end
-
-
-local exports = {}
-exports.round = round
-exports.trim = trim
-exports.split = split
-return exports
