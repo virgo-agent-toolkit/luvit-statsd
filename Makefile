@@ -4,10 +4,11 @@ statsd: lit $(APP_FILES)
 	./lit make
 
 test: lit
+	./lit install
 	LUVI_APP=. LUVI_MAIN=tests/main.lua ./lit
 
 clean:
-	rm -rf statsd lit lit-* luvi
+	rm -rf statsd lit lit-* luvi deps
 
 lit:
 	curl -L https://github.com/luvit/lit/raw/0.11.0/get-lit.sh | sh
