@@ -1,5 +1,5 @@
 return {
-  name = "rphillips/statsd",
+  name = "virgo-agent-toolkit/statsd",
   version = "0.1.0",
   dependencies = {
     "luvit/luvit@1.9.4",
