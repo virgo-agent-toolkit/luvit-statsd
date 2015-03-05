@@ -41,202 +41,194 @@ end
   local misc = require('../misc')
 
   require('tap')(function(test)
-    test('test counters has stats count', function()
+    test('test counters has stats count', function(expect)
       local sd = Statsd:new()
       local metrics = createMetrics()
       metrics.counters['a'] = 2
-      sd:_processMetrics(metrics, function(metrics)
+      sd:_processMetrics(metrics, expect(function(metrics)
         assert(metrics.counters['a'] == 2)
-      end)
+      end))
+    end)
+
+    test('test has correct rate', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.counters['a'] = 2
+      sd:_processMetrics(metrics, expect(function(metrics)
+        assert(metrics.counter_rates['a'] == 20)
+      end))
+    end)
+
+    test('test handle empty', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {}
+      metrics.timer_counters['a'] = 0
+      sd:_processMetrics(metrics, expect(function(metrics)
+        assert(metrics.counter_rates['a'] == nil)
+      end))
+    end)
+
+    test('test handle empty', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {}
+      metrics.timer_counters['a'] = 0
+      sd:_processMetrics(metrics, expect(function(metrics)
+        assert(metrics.counter_rates['a'] == nil)
+      end))
+    end)
+
+    test('test single time', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {100}
+      metrics.timer_counters['a'] = 1
+      sd:_processMetrics(metrics, expect(function(metrics)
+        local timer_data = metrics.timer_data['a']
+        assert(0 == timer_data.std)
+        assert(100 == timer_data.upper)
+        assert(100 == timer_data.lower)
+        assert(1 == timer_data.count)
+        assert(10 == timer_data.count_ps)
+        assert(100 == timer_data.sum)
+        assert(100 == timer_data.median)
+        assert(100 == timer_data.mean)
+      end))
+    end)
+
+    test('test multiple times', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {100, 200, 300}
+      metrics.timer_counters['a'] = 3
+      sd:_processMetrics(metrics, expect(function(metrics)
+        local timer_data = metrics.timer_data['a']
+        assert(81.65 == misc.round(timer_data.std, 2))
+        assert(300 == timer_data.upper)
+        assert(100 == timer_data.lower)
+        assert(3 == timer_data.count)
+        assert(30 == timer_data.count_ps)
+        assert(600 == timer_data.sum)
+        assert(200 == timer_data.mean)
+        assert(200 == timer_data.median)
+      end))
+    end)
+
+    test('test timers single time single percentile', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {100}
+      metrics.timer_counters['a'] = 1
+      metrics.pctThreshold = { 90 }
+      sd:_processMetrics(metrics, expect(function(metrics)
+        local timer_data = metrics.timer_data['a']
+        assert(100 == timer_data.mean_90)
+        assert(100 == timer_data.upper_90)
+        assert(100 == timer_data.sum_90)
+      end))
+    end)
+
+    test('test timers single time multiple percentiles', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {100}
+      metrics.timer_counters['a'] = 1
+      metrics.pctThreshold = { 90, 80 }
+      sd:_processMetrics(metrics, expect(function(metrics)
+        local timer_data = metrics.timer_data['a']
+        assert(100 == timer_data.mean_90)
+        assert(100 == timer_data.upper_90)
+        assert(100 == timer_data.sum_90)
+        assert(100 == timer_data.mean_80)
+        assert(100 == timer_data.upper_80)
+        assert(100 == timer_data.sum_80)
+      end))
+    end)
+
+    test('test timers multiple times single percentiles', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {100, 200, 300}
+      metrics.timer_counters['a'] = 3
+      metrics.pctThreshold = { 90 }
+      sd:_processMetrics(metrics, expect(function(metrics)
+        local timer_data = metrics.timer_data['a']
+        assert(200 == timer_data.mean_90)
+        assert(300 == timer_data.upper_90)
+        assert(600 == timer_data.sum_90)
+      end))
+    end)
+
+    test('test timers multiple times multiple percentiles', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {100, 200, 300}
+      metrics.timer_counters['a'] = 3
+      metrics.pctThreshold = { 90, 80 }
+      sd:_processMetrics(metrics, expect(function(metrics)
+        local timer_data = metrics.timer_data['a']
+        assert(200 == timer_data.mean_90)
+        assert(300 == timer_data.upper_90)
+        assert(600 == timer_data.sum_90)
+        assert(150 == timer_data.mean_80)
+        assert(200 == timer_data.upper_80)
+        assert(300 == timer_data.sum_80)
+      end))
+    end)
+
+    test('test timers sampled times', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {100, 200, 300}
+      metrics.timer_counters['a'] = 50
+      metrics.pctThreshold = { 90, 80 }
+      sd:_processMetrics(metrics, expect(function(metrics)
+        local timer_data = metrics.timer_data['a']
+        assert(50 == timer_data.count)
+        assert(500 == timer_data.count_ps)
+        assert(200 == timer_data.mean_90)
+        assert(300 == timer_data.upper_90)
+        assert(600 == timer_data.sum_90)
+        assert(150 == timer_data.mean_80)
+        assert(200 == timer_data.upper_80)
+        assert(300 == timer_data.sum_80)
+      end))
+    end)
+
+    test('test timers single time single top percentile', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {100}
+      metrics.timer_counters['a'] = 1
+      metrics.pctThreshold = { -10 }
+      sd:_processMetrics(metrics, expect(function(metrics)
+        local timer_data = metrics.timer_data['a']
+        assert(100 == timer_data.mean_top10)
+        assert(100 == timer_data.lower_top10)
+        assert(100 == timer_data.sum_top10)
+      end))
+    end)
+
+    test('test timers multiple times single top percentile', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      metrics.timers['a'] = {10, 10, 10, 10, 10, 10, 10, 10, 100, 200}
+      metrics.timer_counters['a'] = 10
+      metrics.pctThreshold = { -20 }
+      sd:_processMetrics(metrics, expect(function(metrics)
+        local timer_data = metrics.timer_data['a']
+        assert(150 == timer_data.mean_top20);
+        assert(100 == timer_data.lower_top20);
+        assert(300 == timer_data.sum_top20);
+      end))
+    end)
+
+    test('test statsd metrics exist', function(expect)
+      local sd = Statsd:new({metrics_interval = 100})
+      local metrics = createMetrics()
+      sd:_processMetrics(metrics, expect(function(metrics)
+        assert(metrics.statsd_metrics.processing_time ~= nil)
+      end))
     end)
   end)
-
-  --exports['test_has_correct_rate'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.counters['a'] = 2
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    asserts.equal(metrics.counter_rates['a'], 20)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_handle_empty'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {}
-  --  metrics.timer_counters['a'] = 0
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    asserts.equal(metrics.counter_rates['a'], nil)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_single_time'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {100}
-  --  metrics.timer_counters['a'] = 1
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    local timer_data = metrics.timer_data['a']
-  --    asserts.equal(0, timer_data.std)
-  --    asserts.equal(100, timer_data.upper)
-  --    asserts.equal(100, timer_data.lower)
-  --    asserts.equal(1, timer_data.count)
-  --    asserts.equal(10, timer_data.count_ps)
-  --    asserts.equal(100, timer_data.sum)
-  --    asserts.equal(100, timer_data.median)
-  --    asserts.equal(100, timer_data.mean)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_multiple_times'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {100, 200, 300}
-  --  metrics.timer_counters['a'] = 3
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    local timer_data = metrics.timer_data['a']
-  --    asserts.equal(81.65, misc.round(timer_data.std, 2))
-  --    asserts.equal(300, timer_data.upper)
-  --    asserts.equal(100, timer_data.lower)
-  --    asserts.equal(3, timer_data.count)
-  --    asserts.equal(30, timer_data.count_ps)
-  --    asserts.equal(600, timer_data.sum)
-  --    asserts.equal(200, timer_data.mean)
-  --    asserts.equal(200, timer_data.median)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_timers_single_time_single_percentile'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {100}
-  --  metrics.timer_counters['a'] = 1
-  --  metrics.pctThreshold = { 90 }
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    local timer_data = metrics.timer_data['a']
-  --    asserts.equal(100, timer_data.mean_90)
-  --    asserts.equal(100, timer_data.upper_90)
-  --    asserts.equal(100, timer_data.sum_90)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_timers_single_time_multiple_percentiles'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {100}
-  --  metrics.timer_counters['a'] = 1
-  --  metrics.pctThreshold = { 90, 80 }
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    local timer_data = metrics.timer_data['a']
-  --    asserts.equal(100, timer_data.mean_90)
-  --    asserts.equal(100, timer_data.upper_90)
-  --    asserts.equal(100, timer_data.sum_90)
-  --    asserts.equal(100, timer_data.mean_80)
-  --    asserts.equal(100, timer_data.upper_80)
-  --    asserts.equal(100, timer_data.sum_80)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_timers_multiple_times_single_percentiles'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {100, 200, 300}
-  --  metrics.timer_counters['a'] = 3
-  --  metrics.pctThreshold = { 90 }
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    local timer_data = metrics.timer_data['a']
-  --    asserts.equal(200, timer_data.mean_90)
-  --    asserts.equal(300, timer_data.upper_90)
-  --    asserts.equal(600, timer_data.sum_90)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_timers_multiple_times_multiple_percentiles'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {100, 200, 300}
-  --  metrics.timer_counters['a'] = 3
-  --  metrics.pctThreshold = { 90, 80 }
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    local timer_data = metrics.timer_data['a']
-  --    asserts.equal(200, timer_data.mean_90)
-  --    asserts.equal(300, timer_data.upper_90)
-  --    asserts.equal(600, timer_data.sum_90)
-  --    asserts.equal(150, timer_data.mean_80)
-  --    asserts.equal(200, timer_data.upper_80)
-  --    asserts.equal(300, timer_data.sum_80)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_timers_sampled_times'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {100, 200, 300}
-  --  metrics.timer_counters['a'] = 50
-  --  metrics.pctThreshold = { 90, 80 }
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    local timer_data = metrics.timer_data['a']
-  --    asserts.equal(50, timer_data.count)
-  --    asserts.equal(500, timer_data.count_ps)
-  --    asserts.equal(200, timer_data.mean_90)
-  --    asserts.equal(300, timer_data.upper_90)
-  --    asserts.equal(600, timer_data.sum_90)
-  --    asserts.equal(150, timer_data.mean_80)
-  --    asserts.equal(200, timer_data.upper_80)
-  --    asserts.equal(300, timer_data.sum_80)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_timers_single_time_single_top_percentile'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {100}
-  --  metrics.timer_counters['a'] = 1
-  --  metrics.pctThreshold = { -10 }
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    local timer_data = metrics.timer_data['a']
-  --    asserts.equal(100, timer_data.mean_top10)
-  --    asserts.equal(100, timer_data.lower_top10)
-  --    asserts.equal(100, timer_data.sum_top10)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_timers_multiple_times_single_top_percentile'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  metrics.timers['a'] = {10, 10, 10, 10, 10, 10, 10, 10, 100, 200}
-  --  metrics.timer_counters['a'] = 10
-  --  metrics.pctThreshold = { -20 }
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    local timer_data = metrics.timer_data['a']
-  --    asserts.equal(150, timer_data.mean_top20);
-  --    asserts.equal(100, timer_data.lower_top20);
-  --    asserts.equal(300, timer_data.sum_top20);
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_statsd_metrics_exist'] = function(test, asserts)
-  --  local sd = Statsd:new({metrics_interval = 100})
-  --  local metrics = createMetrics()
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    asserts.ok(metrics.statsd_metrics.processing_time)
-  --    test.done()
-  --  end)
-  --end
-
-  --exports['test_version'] = function(test, asserts)
-  --  asserts.ok(version)
-  --  test.done()
-  --end
-
