@@ -21,3 +21,10 @@ Windows
 ```
 make.bat
 ```
+
+Tests
+=====
+
+```
+make test
+```
