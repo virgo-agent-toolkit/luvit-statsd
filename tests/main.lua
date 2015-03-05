@@ -14,6 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 --]]
 
+
+local require = require('require')('bundle:tests/main.lua')
+
 local function createMetrics()
   local counters = {}
   local gauges = {}
@@ -38,19 +41,15 @@ end
   local misc = require('../misc')
 
   require('tap')(function(test)
-    test('blah', function()
+    test('test counters has stats count', function()
+      local sd = Statsd:new()
+      local metrics = createMetrics()
+      metrics.counters['a'] = 2
+      sd:_processMetrics(metrics, function(metrics)
+        assert(metrics.counters['a'] == 2)
+      end)
     end)
   end)
-
-  --exports['test_counters_has_stats_count'] = function(test, asserts)
-  --  local sd = Statsd:new()
-  --  local metrics = createMetrics()
-  --  metrics.counters['a'] = 2
-  --  sd:_processMetrics(metrics, function(metrics)
-  --    asserts.equal(metrics.counters['a'], 2)
-  --    test.done()
-  --  end)
-  --end
 
   --exports['test_has_correct_rate'] = function(test, asserts)
   --  local sd = Statsd:new({metrics_interval = 100})

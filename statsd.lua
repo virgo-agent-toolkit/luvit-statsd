@@ -76,10 +76,6 @@ function Statsd:initialize(options)
   self._timer_counters = {}
   self._gauges = {}
   self._sets = {}
-  self._sock = dgram.createSocket('udp4')
-  self._sock:on('message', utils.bind(Statsd._onMessage, self))
-
-  self._bound = false
 
   if not self._options.port then
     self._options.port = DEFAULT_PORT
@@ -99,11 +95,15 @@ function Statsd:getOptions()
   return self._options
 end
 
+function Statsd:_init()
+end
+
 function Statsd:bind()
-  if self._bound then
+  if self._sock then
     return
   end
-  self._bound = true
+  self._sock = dgram.createSocket()
+  self._sock:on('message', utils.bind(Statsd._onMessage, self))
   self._sock:bind(self._options.port, self._options.host)
 end
 

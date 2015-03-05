@@ -3,6 +3,9 @@ APP_FILES=$(shell find . -type f -name '*.lua')
 statsd: lit $(APP_FILES)
 	./lit make
 
+tests:
+	LUVI_APP=. LUVI_MAIN=tests/main.lua ./lit
+
 clean:
 	rm -rf statsd lit lit-* luvi
 
@@ -17,3 +20,5 @@ uninstall:
 
 lint:
 	find . -name "*.lua" | xargs luacheck
+
+.PHONY: tests lit install lint
