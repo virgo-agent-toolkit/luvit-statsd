@@ -1,17 +1,20 @@
 APP_FILES=$(shell find . -type f -name '*.lua')
 
-statsd: lit $(APP_FILES)
+statsd: lit luvit $(APP_FILES)
 	./lit make
 
-test: lit
+test: luvit $(APP_FILES)
 	./lit install
-	LUVI_APP=. LUVI_MAIN=tests/main.lua ./lit
+	./luvit tests/main.lua
 
 clean:
 	rm -rf statsd lit lit-* luvi deps
 
+luvit:
+	./lit make luvit/luvit
+
 lit:
-	curl -L https://github.com/luvit/lit/raw/0.11.0/get-lit.sh | sh
+	curl -L https://github.com/luvit/lit/raw/2.1.8/get-lit.sh | sh
 
 install: statsd lit
 	install statsd /usr/local/bin
@@ -22,4 +25,4 @@ uninstall:
 lint:
 	find . -name "*.lua" | xargs luacheck
 
-.PHONY: test lit install lint
+.PHONY: uninstall install lint
