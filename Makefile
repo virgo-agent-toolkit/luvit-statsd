@@ -10,7 +10,7 @@ test: luvit $(APP_FILES)
 clean:
 	rm -rf statsd lit lit-* luvi deps
 
-luvit:
+luvit: lit
 	./lit make luvit/luvit
 
 lit:
